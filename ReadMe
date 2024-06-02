@@ -1,0 +1,34 @@
+SSniffer
+
+Overview
+SSniffer is a sophisticated network analysis tool that simplifies network scanning and packet analysis for users of all skill levels. It features a user-friendly GUI built on PyQt5, utilizes nmap for in-depth network scanning, and offers real-time insights into network traffic. The tool handles both readable and encrypted packets, powered by AI-driven analytics to enhance functionality and user experience.
+
+Prerequisites
+    Before installing and running SSniffer, please ensure you have the following prerequisites installed on your system:
+
+    - **Python 3.8 or higher** - [Download Python](https://www.python.org/downloads/)
+    - **Required Python Libraries:** Execute the following command in the command prompt:
+      ```bash
+      pip install re nmap pyshark psutil threading asyncio dns.resolver dns.reversename logging sys functools PyQt5
+Operating System Compatibility:
+    Windows 10 or higher
+    MacOS X Sierra or higher
+    Linux distributions such as Ubuntu 20.04 or higher
+Installation
+    To install SSniffer and its dependencies:
+
+    Download and install nmap from nmap.org
+    Download necessary code files from the SSniffer GitHub repository.
+Features
+Real-time Packet Capturing: Captures packets on your network in real-time with detailed analysis.
+AI-Enhanced Analysis: Leverages artificial intelligence to differentiate between readable and potentially encrypted packets.
+User-Friendly Interface: A clear and easy-to-navigate GUI designed with PyQt5, making it accessible for novices.
+Animated Loading Screen: Provides an engaging user interaction during loading processes.
+Support
+    For support, report issues or seek assistance through the GitHub repository issue tracker.
+
+Contributing
+    We welcome contributions to SSniffer. Please fork the repository and submit a pull request with your improvements.
+
+License
+    The software is for purchase. Any illegal use of the software is solely the user's responsibility, and the developers will not be held accountable. For commercial use and licensing details, please contact the maintainers.

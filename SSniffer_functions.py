@@ -5,8 +5,6 @@ import pyshark
 import psutil
 import threading
 import asyncio
-# import re
-# from urllib.parse import unquote
 import dns.resolver
 import dns.reversename
 from functools import lru_cache
