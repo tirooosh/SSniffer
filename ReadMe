@@ -16,7 +16,7 @@ Operating System Compatibility:
     Linux distributions such as Ubuntu 20.04 or higher
 Installation
     To install SSniffer and its dependencies:
-
+    Download and install ollama - https://www.ollama.com (llama3)
     Download and install nmap from nmap.org
     Download necessary code files from the SSniffer GitHub repository.
 Features
