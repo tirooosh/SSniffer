@@ -5,7 +5,7 @@ from functools import partial
 
 from PyQt5.QtCore import Qt, QRect, pyqtSlot, QObject, pyqtSignal
 from PyQt5.QtGui import QPixmap, QPalette, QBrush
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QScrollArea, QApplication
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QScrollArea, QApplication
 
 import SSniffer_functions
 from Loading_screen import LoadingScreen, CustomTitleBar, BaseWindow  # Ensure this module is correctly implemented
@@ -129,23 +129,73 @@ class SniffWindow(BaseWindow):
         self.vbox.addWidget(refresh_button)  # Add the button to the layout
         # Add label for the readable packets screen
         self.add_label("Readable Packets:", (50, 50), (600, 40))
-
+        packet_list = []
         # Display only the readable packets
         if self.packet_details:
             readable_count = 0
             for key, packets in self.packet_details.items():
                 if packets['readable']:
+                    packet_list.append((key, packets))
                     button = self.setup_buttons(
-                        f"{key}: {len(packets['readable'])} readable packets",
+                        f"{key}: \n{len(packets['readable'])} readable packets",
                         partial(self.show_packet_details, key, packets), self.vbox, size=(1110, 30))
                     readable_count += 1
 
             if readable_count == 0:
                 self.add_label("No readable packets found.", (50, 150), (600, 40))
 
+            readable_button = self.setup_buttons("show readable", self.show_only_readable, self.vbox, size=(1100, 40))
+            sort_button = self.setup_buttons("sort by ip", partial(self.show_packet_groups_of_packet_groups,
+                                                                   SSniffer_functions.sort_by_ip(packet_list)),
+                                             self.vbox, size=(1100, 40))
             back_button = self.setup_buttons("Back to Summary", self.show_summary, self.vbox, size=(1100, 40))
         else:
             self.add_label("No packets captured.", (50, 100), (600, 40))
+
+    def show_packet_groups_of_packet_groups(self, packets_lists):
+        self.update_ui()
+
+        def get_ip(packet_group):
+            key, _ = packet_group
+            parts = key.split(" ")
+            src_ip = parts[0]
+            dst_ip = parts[3]
+            return src_ip, dst_ip
+
+        if packets_lists:
+            for packet_group in packets_lists:
+                src_ip, _ = get_ip(packet_group[0])
+                try:
+                    key,_ = packet_group[0]
+                    resolved_ip = key.split(" ")[1]
+                except Exception as e:
+                    resolved_ip = "Unknown"
+                    print(f"Error resolving IP {src_ip}: {e}")
+
+                self.setup_buttons(
+                    f"involves: {src_ip} which is {resolved_ip}",
+                    partial(self.show_packets_in_order, packet_group),
+                    self.vbox, size=(1100, 60))
+        else:
+            self.add_label("No packets to display.", (50, 100), (600, 40))
+
+        self.setup_buttons("Show Readable", self.show_only_readable, self.vbox, size=(1100, 40))
+        self.setup_buttons("Back to Summary", self.show_summary, self.vbox, size=(1100, 40))
+
+    def show_packets_in_order(self, packet_list):
+        self.update_ui()
+
+        if packet_list:
+            for key, packets in packet_list:
+                self.setup_buttons(
+                    f"{key}: \n{len(packets['readable'])} readable packets, {len(packets['encrypted'])} potentially encrypted packets",
+                    partial(self.show_packet_details, key, packets),
+                    self.vbox, size=(1100, 60))
+        else:
+            self.add_label("No packets to display.", (50, 100), (600, 40))
+
+        self.setup_buttons("Show Readable", self.show_only_readable, self.vbox, size=(1100, 40))
+        self.setup_buttons("Back to Summary", self.show_summary, self.vbox, size=(1100, 40))
 
     @pyqtSlot()
     def stop_packet_capture(self):
@@ -162,16 +212,22 @@ class SniffWindow(BaseWindow):
         # Create and set up the refresh button
         refresh_button = self.setup_buttons("Refresh", self.show_summary, self.vbox, size=(100, 50))
         self.add_label("Summary of the network traffic:", (50, 50), (600, 40))
+        packet_list = []
         if self.packet_details:
             sorted_details = sorted(self.packet_details.items(),
                                     key=lambda item: len(item[1]['readable']) + len(item[1]['encrypted']), reverse=True)
             for idx, (key, packets) in enumerate(sorted_details):
-                summary_text = f"{key}: {len(packets['readable'])} readable,\n{len(packets['encrypted'])} potentially encrypted packets"
+                packet_list.append((key, packets))
+                summary_text = f"{key}: \n{len(packets['readable'])} readable,{len(packets['encrypted'])} potentially encrypted packets"
                 button = self.setup_buttons(summary_text, partial(self.show_packet_details, key, packets), self.vbox,
                                             size=(1100, 80))
 
             # Create and set up the refresh button
             readable_button = self.setup_buttons("show readable", self.show_only_readable, self.vbox, size=(1100, 50))
+            sort_button = self.setup_buttons("sort by ip", partial(self.show_packet_groups_of_packet_groups,
+                                                                   SSniffer_functions.sort_by_ip(packet_list)),
+                                             self.vbox,
+                                             size=(1100, 40))
             back_button = self.setup_buttons("Back to Network Selection", self.network_selection_screen, self.vbox,
                                              size=(1100, 50))
         else:

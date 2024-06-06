@@ -59,6 +59,39 @@ def is_payload_readable(payload):
         return False
 
 
+def sort_by_ip(packet_lists):
+    def get_ip(packet_group):
+        key, packets = packet_group
+        parts = key.split(" ")
+        src_ip = parts[0]
+        dst_ip = parts[3]
+        return src_ip, dst_ip
+
+    def remove_duplicates(lst):
+        seen = set()
+        unique_list = []
+        for item in lst:
+            if item not in seen:
+                unique_list.append(item)
+                seen.add(item)
+        return unique_list
+
+    new_packet_list = []
+    try:
+        for base_packet in packet_lists:
+            temp = []
+            base_ip1, base_ip2 = get_ip(base_packet)
+            for packet in packet_lists:
+                ip1, ip2 = get_ip(packet)
+                if ip1 == base_ip1 or ip1 == base_ip2 or ip2 == base_ip1 or ip2 == base_ip2:
+                    temp.append(packet)
+            new_packet_list.append(temp)
+        return new_packet_list
+    except Exception as e:
+        print(e)
+        return remove_duplicates(packet_lists)
+
+
 def capture_packets(interface, packet_details, stop_event):
     print(f"Silently capturing packets on interface: {interface}...")
     loop = asyncio.new_event_loop()
@@ -87,7 +120,7 @@ def capture_packets(interface, packet_details, stop_event):
                     payload_readable = is_payload_readable(packet.udp.payload)
 
                 if payload_present:
-                    key = f"{src_ip}({resolve_ip(src_ip)}) <-> {dst_ip}({resolve_ip(dst_ip)})"
+                    key = f"{src_ip} ({resolve_ip(src_ip)}) <-> {dst_ip} ({resolve_ip(dst_ip)})"
                     with threading.Lock():
                         if key not in packet_details:
                             packet_details[key] = {'readable': [], 'encrypted': []}
@@ -188,7 +221,6 @@ def format_text_with_newlines(text, chars_per_line):
         formatted_text += current_line.strip()
 
     return formatted_text
-
 
 
 def scan_port(ip, port):
