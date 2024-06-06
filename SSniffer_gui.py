@@ -128,7 +128,7 @@ class SniffWindow(BaseWindow):
         refresh_button = self.setup_buttons("Refresh", self.show_only_readable, self.vbox, size=(100, 50))
         self.vbox.addWidget(refresh_button)  # Add the button to the layout
         # Add label for the readable packets screen
-        self.add_label("Readable Packets:", (50, 50), (600, 40))
+        self.add_label(f"Readable Packets:", (50, 50), (600, 40))
         packet_list = []
         # Display only the readable packets
         if self.packet_details:
@@ -143,7 +143,7 @@ class SniffWindow(BaseWindow):
 
             if readable_count == 0:
                 self.add_label("No readable packets found.", (50, 150), (600, 40))
-
+            self.add_label(f"there are {readable_count} groups of readable Packets", (50, 50), (600, 40))
             readable_button = self.setup_buttons("show readable", self.show_only_readable, self.vbox, size=(1100, 40))
             sort_button = self.setup_buttons("sort by ip", partial(self.show_packet_groups_of_packet_groups,
                                                                    SSniffer_functions.sort_by_ip(packet_list)),
@@ -173,7 +173,7 @@ class SniffWindow(BaseWindow):
                     print(f"Error resolving IP {src_ip}: {e}")
 
                 self.setup_buttons(
-                    f"involves: {src_ip} which is {resolved_ip}",
+                    f"there are {len(packet_group)} packet groups that involves:\n {src_ip} which is {resolved_ip}",
                     partial(self.show_packets_in_order, packet_group),
                     self.vbox, size=(1100, 60))
         else:
@@ -211,9 +211,11 @@ class SniffWindow(BaseWindow):
 
         # Create and set up the refresh button
         refresh_button = self.setup_buttons("Refresh", self.show_summary, self.vbox, size=(100, 50))
-        self.add_label("Summary of the network traffic:", (50, 50), (600, 40))
+
         packet_list = []
         if self.packet_details:
+            self.add_label(f"Summary of the network traffic there are {len(self.packet_details)} packet groups captured:",
+                           (50, 50), (600, 40))
             sorted_details = sorted(self.packet_details.items(),
                                     key=lambda item: len(item[1]['readable']) + len(item[1]['encrypted']), reverse=True)
             for idx, (key, packets) in enumerate(sorted_details):
@@ -231,7 +233,7 @@ class SniffWindow(BaseWindow):
             back_button = self.setup_buttons("Back to Network Selection", self.network_selection_screen, self.vbox,
                                              size=(1100, 50))
         else:
-            self.add_label("No packets captured.", (50, 100), (600, 40))
+            self.add_label("No packets captured yet please refresh.", (50, 100), (1100, 40))
 
     def show_packet_details(self, key, packets):
         self.update_ui()  # Clear and prepare UI for new data
@@ -289,8 +291,15 @@ class ThreadManager(QObject):
     finished = pyqtSignal(str, name='finished')  # Signal to notify when the thread is done
 
 
+class OptionWindow(BaseWindow):
+    def __init__(self):
+        super().__init__("Options", "pictures\\options.png")
+        self.initUI()
+    def initUI(self):
+        self.setFixedSize(200, 200)
+
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    sniff_window = SniffWindow()
-    sniff_window.show()
+    window = OptionWindow()
+    window.show()
     sys.exit(app.exec_())

@@ -63,33 +63,36 @@ def sort_by_ip(packet_lists):
     def get_ip(packet_group):
         key, packets = packet_group
         parts = key.split(" ")
-        src_ip = parts[0]
-        dst_ip = parts[3]
-        return src_ip, dst_ip
+        return parts[0], parts[3]  # source IP, destination IP
 
-    def remove_duplicates(lst):
-        seen = set()
-        unique_list = []
-        for item in lst:
-            if item not in seen:
-                unique_list.append(item)
-                seen.add(item)
-        return unique_list
+    def remove_duplicates(groups):
+        dic = {}
+        new_list = []
 
-    new_packet_list = []
-    try:
-        for base_packet in packet_lists:
-            temp = []
-            base_ip1, base_ip2 = get_ip(base_packet)
-            for packet in packet_lists:
-                ip1, ip2 = get_ip(packet)
-                if ip1 == base_ip1 or ip1 == base_ip2 or ip2 == base_ip1 or ip2 == base_ip2:
-                    temp.append(packet)
-            new_packet_list.append(temp)
-        return new_packet_list
-    except Exception as e:
-        print(e)
-        return remove_duplicates(packet_lists)
+        # Convert the list to a dictionary to remove duplicates
+        for group in groups:
+            key = get_ip(group[0])[0]  # Assuming the first element of each group is unique and can be used as a key
+            dic[key] = group
+
+        # Convert the dictionary back to a list
+        for key, value in dic.items():
+            new_list.append(value)
+
+        return new_list
+
+    grouped_packets = []
+
+    for base_packet in packet_lists:
+        base_ip1, _ = get_ip(base_packet)
+        temp = []
+        for packet in packet_lists:
+            packet_ips = get_ip(packet)
+            if base_ip1 == packet_ips[0] or base_ip1 == packet_ips[0]:
+                temp.append(packet)
+
+        grouped_packets.append(temp)
+
+    return remove_duplicates(grouped_packets)
 
 
 def capture_packets(interface, packet_details, stop_event):
