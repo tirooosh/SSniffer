@@ -52,7 +52,7 @@ class BaseWindow(QWidget):
             self.windows[window_class].show()
         else:
             self.windows[window_class].activateWindow()  # Bring the window to the front if it's already open
-        self.close()
+
 
     def close_button(self):
         answer = QMessageBox.question(self, 'Notice',

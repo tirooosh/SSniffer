@@ -95,17 +95,17 @@ def sort_by_ip(packet_lists):
     return remove_duplicates(grouped_packets)
 
 
-def capture_packets(interface, packet_details, stop_event):
+def capture_packets(interface, packet_details, stop_event,as_is):
     print(f"Silently capturing packets on interface: {interface}...")
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-    capture = pyshark.LiveCapture(interface=interface)
+    capture = pyshark.LiveCapture(interface=interface, include_raw=True, use_json=True)
     try:
         for packet in capture.sniff_continuously():
             if stop_event.is_set():
                 break
-
+            as_is.append(packet)
             if 'IP' in packet:
                 src_ip = packet.ip.src
                 dst_ip = packet.ip.dst

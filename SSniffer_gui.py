@@ -3,9 +3,11 @@ import sys
 import threading
 from functools import partial
 
+import pyshark
 from PyQt5.QtCore import Qt, QRect, pyqtSlot, QObject, pyqtSignal
 from PyQt5.QtGui import QPixmap, QPalette, QBrush
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QScrollArea, QApplication
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QScrollArea, QApplication, QPushButton, QFileDialog, \
+    QMessageBox
 
 import SSniffer_functions
 from Loading_screen import LoadingScreen, CustomTitleBar, BaseWindow  # Ensure this module is correctly implemented
@@ -21,7 +23,21 @@ class SniffWindow(BaseWindow):
 
     def initUI(self):
         self.windows = {}
+        self.options_button = QPushButton("options", self)
 
+        self.options_button.setStyleSheet("""
+                                        QPushButton {
+                                            font-size: 25px; /* Larger font size */
+                                            color: #EED487; /* Text color */
+                                            background-color: rgba(0, 0, 0, 0); /* Transparent background */
+                                            border: 0px solid white; /* White border for visibility */
+                                        }
+                                        QPushButton:hover {
+                                            background-color: rgba(255, 255, 255, 0.1); /* Slightly visible on hover */
+                                        }
+                                    """)
+        self.options_button.clicked.connect(self.open_option_window)
+        self.options_button.move(75, 90)
         # Set background image for the entire window
         self.setAutoFillBackground(True)
         palette = QPalette()
@@ -59,6 +75,8 @@ class SniffWindow(BaseWindow):
         self.thread_manager = ThreadManager()
         self.thread_manager.finished.connect(self.on_thread_finished)
 
+        self.option_window = None
+
     def add_label(self, text, location, size):
         label = QLabel(text, self.widget)  # Ensure parent is self.widget
         label.setStyleSheet("color: white; background-color: #2E3B5B; font-size: 25px;")
@@ -88,14 +106,14 @@ class SniffWindow(BaseWindow):
     def start_packet_capture(self, interface):
         self.packet_details = {}
         self.stop_event.clear()
+        self.as_is = []
         self.capture_thread = threading.Thread(target=SSniffer_functions.capture_packets,
-                                               args=(interface, self.packet_details, self.stop_event))
+                                               args=(interface, self.packet_details, self.stop_event, self.as_is))
         self.capture_thread.start()
 
         self.second_menu()
 
     def second_menu(self):
-        # Suggestion 1: Replace the loop that removes widgets with a call to `self.update_ui()` to avoid code duplication.
         self.update_ui()
 
         # Suggestion 2: Add logging for key actions to improve traceability and debugging.
@@ -128,12 +146,14 @@ class SniffWindow(BaseWindow):
         refresh_button = self.setup_buttons("Refresh", self.show_only_readable, self.vbox, size=(100, 50))
         self.vbox.addWidget(refresh_button)  # Add the button to the layout
         # Add label for the readable packets screen
-        self.add_label(f"Readable Packets:", (50, 50), (600, 40))
+        headline = self.add_label(f"", (50, 50), (600, 40))
         packet_list = []
         # Display only the readable packets
         if self.packet_details:
             readable_count = 0
             for key, packets in self.packet_details.items():
+                if readable_count == 1:
+                    headline.setText("Readable Packets:")
                 if packets['readable']:
                     packet_list.append((key, packets))
                     button = self.setup_buttons(
@@ -144,11 +164,9 @@ class SniffWindow(BaseWindow):
             if readable_count == 0:
                 self.add_label("No readable packets found.", (50, 150), (600, 40))
             self.add_label(f"there are {readable_count} groups of readable Packets", (50, 50), (600, 40))
-            readable_button = self.setup_buttons("show readable", self.show_only_readable, self.vbox, size=(1100, 40))
             sort_button = self.setup_buttons("sort by ip", partial(self.show_packet_groups_of_packet_groups,
                                                                    SSniffer_functions.sort_by_ip(packet_list)),
                                              self.vbox, size=(1100, 40))
-            back_button = self.setup_buttons("Back to Summary", self.show_summary, self.vbox, size=(1100, 40))
         else:
             self.add_label("No packets captured.", (50, 100), (600, 40))
 
@@ -166,7 +184,7 @@ class SniffWindow(BaseWindow):
             for packet_group in packets_lists:
                 src_ip, _ = get_ip(packet_group[0])
                 try:
-                    key,_ = packet_group[0]
+                    key, _ = packet_group[0]
                     resolved_ip = key.split(" ")[1]
                 except Exception as e:
                     resolved_ip = "Unknown"
@@ -178,9 +196,6 @@ class SniffWindow(BaseWindow):
                     self.vbox, size=(1100, 60))
         else:
             self.add_label("No packets to display.", (50, 100), (600, 40))
-
-        self.setup_buttons("Show Readable", self.show_only_readable, self.vbox, size=(1100, 40))
-        self.setup_buttons("Back to Summary", self.show_summary, self.vbox, size=(1100, 40))
 
     def show_packets_in_order(self, packet_list):
         self.update_ui()
@@ -194,9 +209,6 @@ class SniffWindow(BaseWindow):
         else:
             self.add_label("No packets to display.", (50, 100), (600, 40))
 
-        self.setup_buttons("Show Readable", self.show_only_readable, self.vbox, size=(1100, 40))
-        self.setup_buttons("Back to Summary", self.show_summary, self.vbox, size=(1100, 40))
-
     @pyqtSlot()
     def stop_packet_capture(self):
         self.stop_event.set()
@@ -206,16 +218,21 @@ class SniffWindow(BaseWindow):
 
     def show_summary(self):
         # Show the summary
-        for i in reversed(range(self.vbox.count())):
-            self.vbox.itemAt(i).widget().deleteLater()
+        self.update_ui()
+
+        packet_list = []
 
         # Create and set up the refresh button
         refresh_button = self.setup_buttons("Refresh", self.show_summary, self.vbox, size=(100, 50))
+        sort_button = self.setup_buttons("Sort by ip", partial(self.show_packet_groups_of_packet_groups,
+                                                               SSniffer_functions.sort_by_ip(packet_list)),
+                                         self.vbox,
+                                         size=(123, 50))
 
-        packet_list = []
         if self.packet_details:
-            self.add_label(f"Summary of the network traffic there are {len(self.packet_details)} packet groups captured:",
-                           (50, 50), (600, 40))
+            self.add_label(
+                f"Summary of the network traffic there are {len(self.packet_details)} packet groups captured:",
+                (50, 50), (600, 40))
             sorted_details = sorted(self.packet_details.items(),
                                     key=lambda item: len(item[1]['readable']) + len(item[1]['encrypted']), reverse=True)
             for idx, (key, packets) in enumerate(sorted_details):
@@ -223,15 +240,9 @@ class SniffWindow(BaseWindow):
                 summary_text = f"{key}: \n{len(packets['readable'])} readable,{len(packets['encrypted'])} potentially encrypted packets"
                 button = self.setup_buttons(summary_text, partial(self.show_packet_details, key, packets), self.vbox,
                                             size=(1100, 80))
+            sort_button.pressed.connect(partial(self.show_packet_groups_of_packet_groups,
+                                                SSniffer_functions.sort_by_ip(packet_list)))
 
-            # Create and set up the refresh button
-            readable_button = self.setup_buttons("show readable", self.show_only_readable, self.vbox, size=(1100, 50))
-            sort_button = self.setup_buttons("sort by ip", partial(self.show_packet_groups_of_packet_groups,
-                                                                   SSniffer_functions.sort_by_ip(packet_list)),
-                                             self.vbox,
-                                             size=(1100, 40))
-            back_button = self.setup_buttons("Back to Network Selection", self.network_selection_screen, self.vbox,
-                                             size=(1100, 50))
         else:
             self.add_label("No packets captured yet please refresh.", (50, 100), (1100, 40))
 
@@ -286,20 +297,138 @@ class SniffWindow(BaseWindow):
                 self.vbox.removeWidget(widget)
                 widget.deleteLater()
 
+    def open_option_window(self):
+        self.option_window = OptionWindow(self)
+        self.option_window.move(200, 100)
+        self.option_window.show()
+
+    def save_packet_details(self):
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Packet Details", "", "PCAP Files (*.pcap);;All Files (*)", options=options)
+
+        if file_path:
+            # Ensure the file has a .pcap extension
+            if not file_path.lower().endswith('.pcap'):
+                file_path += '.pcap'
+            self.save_packets_to_pcap(file_path)
+
+    def load_packet_details(self):
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Load Packet Details", "", "PCAP Files (*.pcap);;All Files (*)", options=options)
+        try:
+            if file_path:
+                packets = self.load_from_pcap_file(file_path)
+                if packets:
+                    self.packet_details = packets
+                    self.show_loaded_packets(packets)
+        except Exception as e:
+            print(f"while loading: {e}")
+
+    def save_packets_to_pcap(self, filepath):
+        try:
+            # Open a new pcap file to write the packets
+            with open(filepath, 'wb') as f:
+                for packet in self.as_is:
+                    # Write each packet to the pcap file
+                    f.write(packet.get_raw_packet())
+
+            print(f"Packets saved to {filepath}")
+        except Exception as e:
+            print(f"An error occurred while saving the file: {e}")
+
+    def load_from_pcap_file(self, filepath):
+        try:
+            # Use Pyshark to read the pcap file
+            capture = pyshark.FileCapture(filepath, only_summaries=False)
+            capture.set_debug()
+            try:
+                packets = list(capture)
+            finally:
+                capture.close()
+            return packets
+        except Exception as e:
+            print(f"An error occurred while loading the file: {e}")
+            self.show_error_message("Load Error", f"An error occurred while loading the file:\n{e}")
+            return None
+
+    def show_loaded_packets(self, packet_list):
+        new_list = {}
+        try:
+            for packet in packet_list:
+                if 'IP' in packet:
+                    src_ip = packet.ip.src
+                    dst_ip = packet.ip.dst
+                    payload_present = False
+                    payload_readable = False
+
+                    if 'TCP' in packet and hasattr(packet.tcp,
+                                                   'payload') and packet.tcp.payload and packet.tcp.payload != "00":
+                        payload_present = True
+                        payload_readable = SSniffer_functions.is_payload_readable(packet.tcp.payload)
+
+                    elif 'UDP' in packet and hasattr(packet.udp,
+                                                     'payload') and packet.udp.payload and packet.udp.payload != "00":
+                        payload_present = True
+                        payload_readable = SSniffer_functions.is_payload_readable(packet.udp.payload)
+
+                    if payload_present:
+                        key = f"{src_ip} ({SSniffer_functions.resolve_ip(src_ip)}) <-> {dst_ip} ({SSniffer_functions.resolve_ip(dst_ip)})"
+                        if key not in new_list:
+                            new_list[key] = {'readable': [], 'encrypted': []}
+                        if payload_readable:
+                            new_list[key]['readable'].append(packet)
+                        else:
+                            new_list[key]['encrypted'].append(packet)
+                    print("no ip in packet")
+
+            self.show_packets_in_order(new_list)
+        except Exception as e:
+            print(e)
+
+    def show_error_message(self, title, message):
+        QMessageBox.critical(self, title, message, QMessageBox.Ok)
+
 
 class ThreadManager(QObject):
     finished = pyqtSignal(str, name='finished')  # Signal to notify when the thread is done
 
 
 class OptionWindow(BaseWindow):
-    def __init__(self):
+    def __init__(self, SniffWindow):
         super().__init__("Options", "pictures\\options.png")
-        self.initUI()
-    def initUI(self):
-        self.setFixedSize(200, 200)
+        self.initUI(SniffWindow)
+
+    def initUI(self, SniffWindow):
+        WINDOW_LENGTH = 350
+        WINDOW_Hight = int((WINDOW_LENGTH * 800) / 1280) + 50
+        button_hight = int((WINDOW_Hight - 100) / 6)
+        self.setFixedSize(WINDOW_LENGTH, WINDOW_Hight)
+        self.setup_buttons("", SniffWindow.show_summary, self.main_layout, size=(WINDOW_LENGTH, button_hight))
+        self.setup_buttons("", SniffWindow.show_only_readable, self.main_layout, size=(WINDOW_LENGTH, button_hight))
+        self.setup_buttons("", SniffWindow.network_selection_screen, self.main_layout,
+                           size=(WINDOW_LENGTH, button_hight))
+        self.setup_buttons("", SniffWindow.save_packet_details, self.main_layout, size=(WINDOW_LENGTH, button_hight))
+        self.setup_buttons("", SniffWindow.load_packet_details, self.main_layout,
+                           size=(WINDOW_LENGTH, button_hight + 40))
+
+        # close button
+        self.button = QPushButton("X", self)
+        self.button.setStyleSheet(
+            """color: #EED487 ;background-color: #2E3B5B; font-size: 14px;font-weight: 500;border: 0px solid white;}QPushButton:hover {
+                            background-color: rgba(255, 255, 255, 0.1); /* Slightly visible on hover */}""")
+        self.button.setFixedSize(20, 20)
+        self.button.move(WINDOW_LENGTH - 30, 10)
+        self.button.clicked.connect(self.close)
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    window = OptionWindow()
-    window.show()
+    sniff_window = SniffWindow()
+    # window = OptionWindow(sniff_window)
+    # window.show()
+
     sys.exit(app.exec_())
