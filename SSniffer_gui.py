@@ -340,9 +340,7 @@ class SniffWindow(BaseWindow):
         else:
             self.add_label("No packets captured yet please refresh.", (50, 100), (1100, 40))
 
-    def save_packet_details(self, packet_list=None):
-        if packet_list is None:
-            packet_list = self.as_is
+    def save_packet_details(self):
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
         file_path, _ = QFileDialog.getSaveFileName(
@@ -353,7 +351,7 @@ class SniffWindow(BaseWindow):
             if not file_path.lower().endswith('.pcap'):
                 file_path += '.pcap'
         
-        SSniffer_functions.save_packets_to_pcap(file_path, packet_list)
+        SSniffer_functions.save_packets_to_pcap(file_path)
 
 class ThreadManager(QObject):
     finished = pyqtSignal(str, name='finished')  # Signal to notify when the thread is done

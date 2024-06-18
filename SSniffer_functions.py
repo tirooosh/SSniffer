@@ -1,5 +1,5 @@
 import re
-
+import os
 import nmap
 import pyshark
 import psutil
@@ -10,7 +10,8 @@ import dns.reversename
 from functools import lru_cache
 import ollama
 from PyQt5.QtWidgets import QMessageBox
-from scapy.all import wrpcap
+
+
 
 
 
@@ -99,12 +100,16 @@ def sort_by_ip(packet_lists):
     return remove_duplicates(grouped_packets)
 
 
-def capture_packets(interface, packet_details, stop_event,as_is):
+def capture_packets(interface, packet_details, stop_event, as_is):
     print(f"Silently capturing packets on interface: {interface}...")
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-    capture = pyshark.LiveCapture(interface=interface, use_json=True)
+    try:
+        os.remove("saveFiles\\SSniffer.pcap")
+    except FileNotFoundError:
+        print("File SSniffer.pcap not found")
+    capture = pyshark.LiveCapture(interface=interface, output_file="saveFiles\\SSniffer.pcap")
     try:
         for packet in capture.sniff_continuously():
             if stop_event.is_set():
@@ -394,13 +399,32 @@ def load_packet_details(file_path="packet.pcap"):
     except Exception as e:
         print(f"while loading: {e}")
 
-def save_packets_to_pcap(file_path, packets):
+def save_packets_to_pcap(dest_file_path=None):
     try:
-        # Use Scapy's wrpcap function to write packets to a file
-        wrpcap(file_path, packets)
-        print(f"Successfully saved {len(packets)} packets to {file_path}")
+        src_file_path = "saveFiles\\SSniffer.pcap"
+        # Check if the source file exists
+        if not os.path.isfile(src_file_path):
+            raise FileNotFoundError(f"The source file '{src_file_path}' does not exist.")
+        
+        if dest_file_path is None:
+            base, ext = os.path.splitext(src_file_path)
+            dest_file_path = f"{base}_copy{ext}"
+        
+        # Open the source file in binary read mode
+        with open(src_file_path, 'rb') as src_file:
+            # Read the entire content of the source file
+            file_data = src_file.read()
+        
+        # Open the destination file in binary write mode and write the data
+        with open(dest_file_path, 'wb') as dest_file:
+            dest_file.write(file_data)
+        
+        print(f"File duplicated successfully from '{src_file_path}' to '{dest_file_path}'")
+        return dest_file_path
+    
     except Exception as e:
-        print(f"An error occurred while saving the file: {e}")
+        print(f"An error occurred while duplicating the file: {e}")
+        raise
 
 def show_error_message(title, message):
     QMessageBox.critical(title, message, QMessageBox.Ok)
