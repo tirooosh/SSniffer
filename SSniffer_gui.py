@@ -1,3 +1,4 @@
+from collections import defaultdict
 import logging
 import sys
 import threading
@@ -199,7 +200,7 @@ class SniffWindow(BaseWindow):
 
     def show_packets_in_order(self, packet_list):
         self.update_ui()
-
+        print(packet_list)
         if packet_list:
             for key, packets in packet_list:
                 self.setup_buttons(
@@ -302,96 +303,57 @@ class SniffWindow(BaseWindow):
         self.option_window.move(200, 100)
         self.option_window.show()
 
-    def save_packet_details(self):
+    def load_packet_details(self):
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        file_path, _ = QFileDialog.getOpenFileName(
+            None, "Load Packet Details", "", "PCAP Files (*.pcap);;All Files (*)", options=options)
+        packet_details = SSniffer_functions.load_packet_details(file_path)
+        self.display_loaded_packet_details(packet_details)
+    
+    def display_loaded_packet_details(self, packet_details):
+        self.update_ui()
+
+        packet_list = []
+
+        # Create and set up the refresh button
+        refresh_button = self.setup_buttons("Refresh", self.show_summary, self.vbox, size=(100, 50))
+        sort_button = self.setup_buttons("Sort by ip", partial(self.show_packet_groups_of_packet_groups,
+                                                               SSniffer_functions.sort_by_ip(packet_list)),
+                                         self.vbox,
+                                         size=(123, 50))
+
+        if packet_details:
+            self.add_label(
+                f"Summary of the network traffic there are {len(packet_details)} packet groups captured:",
+                (50, 50), (600, 40))
+            sorted_details = sorted(packet_details.items(),
+                                    key=lambda item: len(item[1]['readable']) + len(item[1]['encrypted']), reverse=True)
+            for idx, (key, packets) in enumerate(sorted_details):
+                packet_list.append((key, packets))
+                summary_text = f"{key}: \n{len(packets['readable'])} readable,{len(packets['encrypted'])} potentially encrypted packets"
+                button = self.setup_buttons(summary_text, partial(self.show_packet_details, key, packets), self.vbox,
+                                            size=(1100, 80))
+            sort_button.pressed.connect(partial(self.show_packet_groups_of_packet_groups,
+                                                SSniffer_functions.sort_by_ip(packet_list)))
+
+        else:
+            self.add_label("No packets captured yet please refresh.", (50, 100), (1100, 40))
+
+    def save_packet_details(self, packet_list=None):
+        if packet_list is None:
+            packet_list = self.as_is
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Packet Details", "", "PCAP Files (*.pcap);;All Files (*)", options=options)
+            None, "Save Packet Details", "", "PCAP Files (*.pcap);;All Files (*)", options=options)
 
         if file_path:
             # Ensure the file has a .pcap extension
             if not file_path.lower().endswith('.pcap'):
                 file_path += '.pcap'
-            self.save_packets_to_pcap(file_path)
-
-    def load_packet_details(self):
-        options = QFileDialog.Options()
-        options |= QFileDialog.DontUseNativeDialog
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Load Packet Details", "", "PCAP Files (*.pcap);;All Files (*)", options=options)
-        try:
-            if file_path:
-                packets = self.load_from_pcap_file(file_path)
-                if packets:
-                    self.packet_details = packets
-                    self.show_loaded_packets(packets)
-        except Exception as e:
-            print(f"while loading: {e}")
-
-    def save_packets_to_pcap(self, filepath):
-        try:
-            # Open a new pcap file to write the packets
-            with open(filepath, 'wb') as f:
-                for packet in self.as_is:
-                    # Write each packet to the pcap file
-                    f.write(packet.get_raw_packet())
-
-            print(f"Packets saved to {filepath}")
-        except Exception as e:
-            print(f"An error occurred while saving the file: {e}")
-
-    def load_from_pcap_file(self, filepath):
-        try:
-            # Use Pyshark to read the pcap file
-            capture = pyshark.FileCapture(filepath, only_summaries=False)
-            capture.set_debug()
-            try:
-                packets = list(capture)
-            finally:
-                capture.close()
-            return packets
-        except Exception as e:
-            print(f"An error occurred while loading the file: {e}")
-            self.show_error_message("Load Error", f"An error occurred while loading the file:\n{e}")
-            return None
-
-    def show_loaded_packets(self, packet_list):
-        new_list = {}
-        try:
-            for packet in packet_list:
-                if 'IP' in packet:
-                    src_ip = packet.ip.src
-                    dst_ip = packet.ip.dst
-                    payload_present = False
-                    payload_readable = False
-
-                    if 'TCP' in packet and hasattr(packet.tcp,
-                                                   'payload') and packet.tcp.payload and packet.tcp.payload != "00":
-                        payload_present = True
-                        payload_readable = SSniffer_functions.is_payload_readable(packet.tcp.payload)
-
-                    elif 'UDP' in packet and hasattr(packet.udp,
-                                                     'payload') and packet.udp.payload and packet.udp.payload != "00":
-                        payload_present = True
-                        payload_readable = SSniffer_functions.is_payload_readable(packet.udp.payload)
-
-                    if payload_present:
-                        key = f"{src_ip} ({SSniffer_functions.resolve_ip(src_ip)}) <-> {dst_ip} ({SSniffer_functions.resolve_ip(dst_ip)})"
-                        if key not in new_list:
-                            new_list[key] = {'readable': [], 'encrypted': []}
-                        if payload_readable:
-                            new_list[key]['readable'].append(packet)
-                        else:
-                            new_list[key]['encrypted'].append(packet)
-                    print("no ip in packet")
-
-            self.show_packets_in_order(new_list)
-        except Exception as e:
-            print(e)
-
-    def show_error_message(self, title, message):
-        QMessageBox.critical(self, title, message, QMessageBox.Ok)
-
+        
+        SSniffer_functions.save_packets_to_pcap(file_path, packet_list)
 
 class ThreadManager(QObject):
     finished = pyqtSignal(str, name='finished')  # Signal to notify when the thread is done
@@ -422,7 +384,9 @@ class OptionWindow(BaseWindow):
                             background-color: rgba(255, 255, 255, 0.1); /* Slightly visible on hover */}""")
         self.button.setFixedSize(20, 20)
         self.button.move(WINDOW_LENGTH - 30, 10)
-        self.button.clicked.connect(self.close)
+        self.button.clicked.connect(exit)
+
+
 
 
 if __name__ == '__main__':

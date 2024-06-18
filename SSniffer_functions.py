@@ -8,6 +8,10 @@ import asyncio
 import dns.resolver
 import dns.reversename
 from functools import lru_cache
+import ollama
+from PyQt5.QtWidgets import QMessageBox
+from scapy.all import wrpcap
+
 
 
 def list_network_interfaces():
@@ -100,7 +104,7 @@ def capture_packets(interface, packet_details, stop_event,as_is):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-    capture = pyshark.LiveCapture(interface=interface, include_raw=True, use_json=True)
+    capture = pyshark.LiveCapture(interface=interface, use_json=True)
     try:
         for packet in capture.sniff_continuously():
             if stop_event.is_set():
@@ -123,7 +127,7 @@ def capture_packets(interface, packet_details, stop_event,as_is):
                     payload_readable = is_payload_readable(packet.udp.payload)
 
                 if payload_present:
-                    key = f"{src_ip} ({resolve_ip(src_ip)}) <-> {dst_ip} ({resolve_ip(dst_ip)})"
+                    key = f"{src_ip} ({resolve_ip(src_ip)}) -> {dst_ip} ({resolve_ip(dst_ip)})"
                     with threading.Lock():
                         if key not in packet_details:
                             packet_details[key] = {'readable': [], 'encrypted': []}
@@ -199,7 +203,6 @@ def show_packet_content(packet):
             detail_str += f"Error decoding payload: {e}\n"
     else:
         detail_str += "Payload not available for this packet.\n"
-    print(detail_str)
     return detail_str
 
 
@@ -333,14 +336,74 @@ def print_summary(packet_details):
         print("No packets captured.")
 
 
-import ollama
-
-
 def asko_llama(question):
     preview = "youre used as an ai for a school project of main your answers are straghtly fed to the user so dont add anything more. please describe me the perpose of that packet payload ignore all decrypted parts and answer with 1 line. if you dont know somthing its okay just say you cant undestand the payload at all. the payload is:"
     response = ollama.generate(model='llama3', prompt=str(preview + question))
     return (response['response'])
 
+def load_from_pcap_file(file_path="packet.pcap"):
+    try:
+        # Use Pyshark to read the pcap file
+        with pyshark.FileCapture(file_path, use_json=True) as capture:
+            packets = list(capture)
+            return packets
+    except Exception as e:
+        print(f"An error occurred while loading the file: {e}")
+        show_error_message("Load Error", f"An error occurred while loading the file:\n{e}")
+        return None
+
+
+def convert_packet_format(packet_list):
+    import SSniffer_functions
+    try:
+        packet_details = {}
+        for packet in packet_list:
+            if 'IP' in packet:
+                src_ip = packet.ip.src
+                dst_ip = packet.ip.dst
+                payload_present = False
+                payload_readable = False
+
+                if 'TCP' in packet and hasattr(packet.tcp, 'payload') and packet.tcp.payload and packet.tcp.payload != "00":
+                    payload_present = True
+                    payload_readable = SSniffer_functions.is_payload_readable(packet.tcp.payload)
+
+                elif 'UDP' in packet and hasattr(packet.udp, 'payload') and packet.udp.payload and packet.udp.payload != "00":
+                    payload_present = True
+                    payload_readable = SSniffer_functions.is_payload_readable(packet.udp.payload)
+
+                if payload_present:
+                    key = f"{src_ip} ({SSniffer_functions.resolve_ip(src_ip)}) -> {dst_ip} ({SSniffer_functions.resolve_ip(dst_ip)})"
+                    if key not in packet_details:
+                        packet_details[key] = {'readable': [], 'encrypted': []}
+                    if payload_readable:
+                        packet_details[key]['readable'].append(packet)
+                    else:
+                        packet_details[key]['encrypted'].append(packet)
+        return packet_details
+    except Exception as e:
+        print(f"An error occurred while loading the file: {e}")
+
+
+def load_packet_details(file_path="packet.pcap"):
+    try:
+        packets = load_from_pcap_file(file_path)
+        if packets:
+            packets = convert_packet_format(packets)
+            return packets
+    except Exception as e:
+        print(f"while loading: {e}")
+
+def save_packets_to_pcap(file_path, packets):
+    try:
+        # Use Scapy's wrpcap function to write packets to a file
+        wrpcap(file_path, packets)
+        print(f"Successfully saved {len(packets)} packets to {file_path}")
+    except Exception as e:
+        print(f"An error occurred while saving the file: {e}")
+
+def show_error_message(title, message):
+    QMessageBox.critical(title, message, QMessageBox.Ok)
 
 def run():
     print("Listing network interfaces...")
