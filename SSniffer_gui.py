@@ -277,7 +277,7 @@ class SniffWindow(BaseWindow):
         # Starting the thread to process packet details
         def thread_function():
             try:
-                packet_details = SSniffer_functions.show_packet_content(packet)  # Assume this is your function
+                packet_details = SSniffer_functions.show_packet_content(packet) 
                 self.thread_manager.finished.emit(packet_details)  # Emit signal with the results
             except Exception as e:
                 self.thread_manager.finished.emit(f"Error displaying packet details: {str(e)}")
@@ -289,6 +289,12 @@ class SniffWindow(BaseWindow):
         # Close the loading screen and update the UI
         self.loading_screen.close()
         self.add_label(packet_details, (50, 100), (600, 40))
+        answer = QMessageBox.question(self, 'Save?',
+                                      "do you want to save the results?",
+                                      QMessageBox.Yes | QMessageBox.No,
+                                      QMessageBox.No)
+        if answer == QMessageBox.Yes:
+            self.save_spesific_packet(packet_details)
 
     def update_ui(self):
         """Clear all widgets from the QVBoxLayout and prepare for new content."""
@@ -339,13 +345,39 @@ class SniffWindow(BaseWindow):
 
         else:
             self.add_label("No packets captured yet please refresh.", (50, 100), (1100, 40))
-
-    def save_packet_details(self):
+    def save_gui(self):
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
         file_path, _ = QFileDialog.getSaveFileName(
             None, "Save Packet Details", "", "PCAP Files (*.pcap);;All Files (*)", options=options)
+        return file_path
+    
+    def save_spesific_packet(self, text_to_save):
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
 
+        # Open the save file dialog
+        file_path, _ = QFileDialog.getSaveFileName(
+            None, "Save Text to File", "", "Text Files (*.txt);;All Files (*)", options=options)
+
+        # If the user provided a file path, write the text to that file
+        if file_path:
+            if not file_path.lower().endswith('.txt'):
+                file_path += '.txt'
+            try:
+                # Open the file in write mode
+                with open(file_path, 'w', encoding='utf-8') as file:
+                    file.write(text_to_save)
+                print(f"Text successfully written to {file_path}")
+            except Exception as e:
+                print(f"An error occurred while writing to the file: {e}")
+        else:
+            print("Save operation cancelled by the user.")
+
+
+    def save_packet_details(self):
+        
+        file_path = self.save_gui()
         if file_path:
             # Ensure the file has a .pcap extension
             if not file_path.lower().endswith('.pcap'):
