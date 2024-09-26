@@ -1,7 +1,7 @@
 SSniffer
 
 Overview
-SSniffer is a sophisticated network analysis tool that simplifies network scanning and packet analysis for users of all skill levels. It features a user-friendly GUI built on PyQt5, utilizes nmap for in-depth network scanning, and offers real-time insights into network traffic. The tool handles both readable and encrypted packets, powered by AI-driven analytics to enhance functionality and user experience.
+SSniffer is a network analysis tool that simplifies network scanning and packet analysis. It features a user-friendly GUI built on PyQt5, utilizes nmap for in-depth network scanning, and offers real-time insights into network traffic. The tool handles both readable and encrypted packets, powered by AI-driven analytics to enhance functionality and user experience.
 
 Prerequisites
     Before installing and running SSniffer, please ensure you have the following prerequisites installed on your system:
